@@ -17,7 +17,7 @@ reqwest = { version = "0.12", features = ["json", "blocking"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
-sha2 = "0.10"
+sha2 = "0.11"
 hex = "0.4"
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 rand = "0.10"
