@@ -83,6 +83,22 @@ pub struct MinerInfo {
     pub last_seen: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum MinersResponse {
+    Wrapped { miners: Vec<MinerInfo> },
+    Legacy(Vec<MinerInfo>),
+}
+
+impl MinersResponse {
+    fn into_miners(self) -> Vec<MinerInfo> {
+        match self {
+            MinersResponse::Wrapped { miners } => miners,
+            MinersResponse::Legacy(miners) => miners,
+        }
+    }
+}
+
 /// Epoch enrollment response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EnrollResponse {
@@ -309,12 +325,12 @@ impl NodeClient {
 
     /// List active miners on the network.
     pub fn miners(&self) -> Result<Vec<MinerInfo>> {
-        let resp: Vec<MinerInfo> = self
+        let resp: MinersResponse = self
             .http
             .get(format!("{}/api/miners", self.base_url))
             .send()?
             .json()?;
-        Ok(resp)
+        Ok(resp.into_miners())
     }
 
     /// Request an attestation challenge nonce.
@@ -423,5 +439,47 @@ mod tests {
     fn test_node_client_creation() {
         let client = NodeClient::new("https://rustchain.org/");
         assert_eq!(client.base_url, "https://rustchain.org");
+    }
+
+    #[test]
+    fn test_miners_response_accepts_wrapped_live_shape() {
+        let response: MinersResponse = serde_json::from_value(serde_json::json!({
+            "miners": [
+                {
+                    "miner": "wallet-1",
+                    "miner_id": "miner-1",
+                    "device_arch": "g4",
+                    "device_family": "powerpc",
+                    "last_seen": "2026-05-11T00:00:00Z"
+                }
+            ],
+            "pagination": {
+                "limit": 50,
+                "offset": 0
+            }
+        }))
+        .unwrap();
+
+        let miners = response.into_miners();
+        assert_eq!(miners.len(), 1);
+        assert_eq!(miners[0].miner_id, "miner-1");
+    }
+
+    #[test]
+    fn test_miners_response_accepts_legacy_array_shape() {
+        let response: MinersResponse = serde_json::from_value(serde_json::json!([
+            {
+                "miner": "wallet-2",
+                "miner_id": "miner-2",
+                "device_arch": "modern",
+                "device_family": "x86",
+                "last_seen": "2026-05-11T00:00:00Z"
+            }
+        ]))
+        .unwrap();
+
+        let miners = response.into_miners();
+        assert_eq!(miners.len(), 1);
+        assert_eq!(miners[0].miner, "wallet-2");
     }
 }
