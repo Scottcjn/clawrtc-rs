@@ -32,7 +32,6 @@
 //! - **Attestation** — submit hardware proofs to earn RTC
 
 use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
-use rand::rngs::OsRng;
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -81,6 +80,13 @@ pub struct MinerInfo {
     pub device_family: String,
     #[serde(default)]
     pub last_seen: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum MinersResponse {
+    List(Vec<MinerInfo>),
+    Wrapped { miners: Vec<MinerInfo> },
 }
 
 /// Epoch enrollment response.
@@ -187,7 +193,8 @@ pub struct Wallet {
 impl Wallet {
     /// Generate a new random wallet.
     pub fn generate() -> Self {
-        let signing_key = SigningKey::generate(&mut OsRng);
+        let private_key = rand::random::<[u8; 32]>();
+        let signing_key = SigningKey::from_bytes(&private_key);
         Self { signing_key }
     }
 
@@ -200,8 +207,8 @@ impl Wallet {
 
     /// Restore a wallet from a hex-encoded private key.
     pub fn from_hex(hex_key: &str) -> Result<Self> {
-        let bytes = hex::decode(hex_key)
-            .map_err(|e| ClawError::Wallet(format!("invalid hex: {e}")))?;
+        let bytes =
+            hex::decode(hex_key).map_err(|e| ClawError::Wallet(format!("invalid hex: {e}")))?;
         if bytes.len() != 32 {
             return Err(ClawError::Wallet("private key must be 32 bytes".into()));
         }
@@ -309,12 +316,15 @@ impl NodeClient {
 
     /// List active miners on the network.
     pub fn miners(&self) -> Result<Vec<MinerInfo>> {
-        let resp: Vec<MinerInfo> = self
+        let resp: MinersResponse = self
             .http
             .get(format!("{}/api/miners", self.base_url))
             .send()?
             .json()?;
-        Ok(resp)
+        Ok(match resp {
+            MinersResponse::List(miners) => miners,
+            MinersResponse::Wrapped { miners } => miners,
+        })
     }
 
     /// Request an attestation challenge nonce.
@@ -350,12 +360,7 @@ impl NodeClient {
     }
 
     /// Enroll in the current epoch for reward eligibility.
-    pub fn enroll(
-        &self,
-        wallet: &str,
-        miner_id: &str,
-        arch: &CpuArch,
-    ) -> Result<EnrollResponse> {
+    pub fn enroll(&self, wallet: &str, miner_id: &str, arch: &CpuArch) -> Result<EnrollResponse> {
         let payload = serde_json::json!({
             "miner_pubkey": wallet,
             "miner_id": miner_id,
