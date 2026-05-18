@@ -7,7 +7,20 @@ const DEFAULT_NODE: &str = "https://rustchain.org";
 #[derive(Debug, PartialEq)]
 struct CliOptions {
     node_url: String,
+    ice_servers: IceServerConfig,
     args: Vec<String>,
+}
+
+#[derive(Debug, Default, PartialEq)]
+struct IceServerConfig {
+    stun: Vec<String>,
+    turn: Vec<String>,
+}
+
+impl IceServerConfig {
+    fn is_empty(&self) -> bool {
+        self.stun.is_empty() && self.turn.is_empty()
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -19,6 +32,8 @@ struct StatusOutput {
     balance_rtc: Option<f64>,
     mining_active: Option<bool>,
     active_miners: usize,
+    stun_servers_configured: usize,
+    turn_servers_configured: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -48,7 +63,7 @@ fn run(raw_args: Vec<String>) -> Result<(), String> {
         .ok_or_else(|| usage("missing command"))?;
 
     match command.as_str() {
-        "status" => status(&options.node_url, rest),
+        "status" => status(&options, rest),
         "wallet" => wallet(&options.node_url, rest),
         "miner" => miner(&options.node_url, rest),
         "-h" | "--help" | "help" => {
@@ -59,12 +74,12 @@ fn run(raw_args: Vec<String>) -> Result<(), String> {
     }
 }
 
-fn status(node_url: &str, args: &[String]) -> Result<(), String> {
+fn status(options: &CliOptions, args: &[String]) -> Result<(), String> {
     let json = has_flag(args, "--json");
     let wallet = option_value(args, "--wallet")?;
     reject_unknown_flags(args, &["--json", "--wallet"])?;
 
-    let node = NodeClient::new(node_url);
+    let node = NodeClient::new(&options.node_url);
     let health = node
         .health()
         .map_err(|err| format!("status failed: {err}"))?;
@@ -92,6 +107,8 @@ fn status(node_url: &str, args: &[String]) -> Result<(), String> {
         balance_rtc: balance,
         mining_active,
         active_miners: miners.len(),
+        stun_servers_configured: options.ice_servers.stun.len(),
+        turn_servers_configured: options.ice_servers.turn.len(),
     };
 
     if json {
@@ -109,6 +126,12 @@ fn status(node_url: &str, args: &[String]) -> Result<(), String> {
         }
         if let Some(active) = output.mining_active {
             println!("Mining active: {active}");
+        }
+        if !options.ice_servers.is_empty() {
+            println!(
+                "ICE servers: {} STUN, {} TURN",
+                output.stun_servers_configured, output.turn_servers_configured
+            );
         }
         Ok(())
     }
@@ -204,6 +227,7 @@ fn miner_stats(node_url: &str, args: &[String]) -> Result<(), String> {
 
 fn parse_global_options(raw_args: Vec<String>) -> Result<CliOptions, String> {
     let mut node_url = DEFAULT_NODE.to_string();
+    let mut ice_servers = IceServerConfig::default();
     let mut args = Vec::new();
     let mut iter = raw_args.into_iter();
 
@@ -212,6 +236,16 @@ fn parse_global_options(raw_args: Vec<String>) -> Result<CliOptions, String> {
             node_url = iter.next().ok_or_else(|| usage("--node requires a URL"))?;
         } else if let Some(value) = arg.strip_prefix("--node=") {
             node_url = value.to_string();
+        } else if arg == "--stun" {
+            let value = iter.next().ok_or_else(|| usage("--stun requires a URL"))?;
+            push_ice_server(&mut ice_servers.stun, "--stun", value)?;
+        } else if let Some(value) = arg.strip_prefix("--stun=") {
+            push_ice_server(&mut ice_servers.stun, "--stun", value.to_string())?;
+        } else if arg == "--turn" {
+            let value = iter.next().ok_or_else(|| usage("--turn requires a URL"))?;
+            push_ice_server(&mut ice_servers.turn, "--turn", value)?;
+        } else if let Some(value) = arg.strip_prefix("--turn=") {
+            push_ice_server(&mut ice_servers.turn, "--turn", value.to_string())?;
         } else {
             args.push(arg);
             args.extend(iter);
@@ -219,7 +253,19 @@ fn parse_global_options(raw_args: Vec<String>) -> Result<CliOptions, String> {
         }
     }
 
-    Ok(CliOptions { node_url, args })
+    Ok(CliOptions {
+        node_url,
+        ice_servers,
+        args,
+    })
+}
+
+fn push_ice_server(target: &mut Vec<String>, flag: &str, value: String) -> Result<(), String> {
+    if value.trim().is_empty() {
+        return Err(usage(&format!("{flag} requires a URL")));
+    }
+    target.push(value);
+    Ok(())
 }
 
 fn has_flag(args: &[String], flag: &str) -> bool {
@@ -318,9 +364,9 @@ fn print_usage() {
 
 fn usage_text() -> &'static str {
     "Usage:
-  clawrtc [--node URL] status [--json] [--wallet WALLET]
-  clawrtc [--node URL] wallet balance WALLET [--json]
-  clawrtc [--node URL] miner stats [--json]"
+  clawrtc [--node URL] [--stun URL] [--turn URL] status [--json] [--wallet WALLET]
+  clawrtc [--node URL] [--stun URL] [--turn URL] wallet balance WALLET [--json]
+  clawrtc [--node URL] [--stun URL] [--turn URL] miner stats [--json]"
 }
 
 #[cfg(test)]
@@ -341,9 +387,46 @@ mod tests {
             options,
             CliOptions {
                 node_url: "https://example.test".into(),
+                ice_servers: IceServerConfig::default(),
                 args: vec!["status".into(), "--json".into()],
             }
         );
+    }
+
+    #[test]
+    fn parses_repeated_ice_server_options() {
+        let options = parse_global_options(vec![
+            "--stun".into(),
+            "stun:stun1.example.test:3478".into(),
+            "--stun=stun:stun2.example.test:3478".into(),
+            "--turn".into(),
+            "turn:turn.example.test:3478".into(),
+            "status".into(),
+        ])
+        .unwrap();
+
+        assert_eq!(options.args, vec!["status".to_string()]);
+        assert_eq!(
+            options.ice_servers.stun,
+            vec![
+                "stun:stun1.example.test:3478".to_string(),
+                "stun:stun2.example.test:3478".to_string(),
+            ]
+        );
+        assert_eq!(
+            options.ice_servers.turn,
+            vec!["turn:turn.example.test:3478".to_string()]
+        );
+    }
+
+    #[test]
+    fn rejects_missing_ice_server_option_values() {
+        assert!(parse_global_options(vec!["--stun".into()])
+            .unwrap_err()
+            .contains("--stun requires a URL"));
+        assert!(parse_global_options(vec!["--turn".into()])
+            .unwrap_err()
+            .contains("--turn requires a URL"));
     }
 
     #[test]
