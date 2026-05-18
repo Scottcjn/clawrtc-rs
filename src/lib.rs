@@ -308,7 +308,7 @@ impl NodeClient {
     pub fn balance(&self, wallet: &str) -> Result<f64> {
         let resp: BalanceResponse = self
             .http
-            .get(format!("{}/api/balance?wallet={wallet}", self.base_url))
+            .get(format!("{}/balance/{wallet}", self.base_url))
             .send()?
             .json()?;
         Ok(resp.balance_rtc)
@@ -393,6 +393,9 @@ impl NodeClient {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::thread;
 
     #[test]
     fn test_wallet_generation() {
@@ -428,5 +431,39 @@ mod tests {
     fn test_node_client_creation() {
         let client = NodeClient::new("https://rustchain.org/");
         assert_eq!(client.base_url, "https://rustchain.org");
+    }
+
+    #[test]
+    fn test_node_client_balance_uses_live_balance_path() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base_url = format!("http://{}", listener.local_addr().unwrap());
+
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut buffer = [0_u8; 2048];
+            let bytes_read = stream.read(&mut buffer).unwrap();
+            let request = String::from_utf8_lossy(&buffer[..bytes_read]).to_string();
+
+            let (status, body) = if request.starts_with("GET /balance/RTCabc123 HTTP/1.1") {
+                ("200 OK", r#"{"balance_rtc":12.5}"#)
+            } else {
+                ("404 Not Found", "<html>not found</html>")
+            };
+            let response = format!(
+                "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            stream.write_all(response.as_bytes()).unwrap();
+            request
+        });
+
+        let client = NodeClient::new(&base_url);
+        assert_eq!(client.balance("RTCabc123").unwrap(), 12.5);
+
+        let request = server.join().unwrap();
+        assert!(
+            request.starts_with("GET /balance/RTCabc123 HTTP/1.1"),
+            "unexpected request line: {request:?}"
+        );
     }
 }
