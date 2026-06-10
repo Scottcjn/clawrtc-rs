@@ -1,3 +1,5 @@
+[![BCOS Certified](https://img.shields.io/badge/BCOS-Certified-brightgreen?style=flat)](BCOS.md)
+
 # clawrtc
 
 Rust client for [RustChain](https://rustchain.org) RTC mining — hardware attestation, Ed25519 wallets, and Proof-of-Antiquity (PoA) consensus.
@@ -58,4 +60,4 @@ fn main() {
 
 ## License
 
-MIT — [Elyan Labs](https://rustchain.org)
+MIT — [Elyan Labs](https://rustchain.org)

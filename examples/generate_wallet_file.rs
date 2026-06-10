@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 use clawrtc::Wallet;
 use std::env;
 use std::fs;

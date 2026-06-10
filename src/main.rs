@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 use clawrtc::{MinerInfo, NodeClient};
 use serde::Serialize;
 use std::{env, process};

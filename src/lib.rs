@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 //! # ClawRTC
 //!
 //! Rust client for RustChain RTC mining — hardware attestation,
