@@ -1,0 +1,63 @@
+[![BCOS Certified](https://img.shields.io/badge/BCOS-Certified-brightgreen?style=flat)](BCOS.md)
+
+# clawrtc
+
+Rust klijent za rudarenje RTC-a na [RustChainu](https://rustchain.org): hardverska atestacija, Ed25519 novčanici i Proof-of-Antiquity (PoA) konsenzus.
+
+## Značajke
+
+- **Ed25519 novčanici**: generiranje, potpisivanje i provjera s RTC adresama
+- **Klijent čvora**: provjere zdravlja, upiti stanja i popisi rudara
+- **Hardverska atestacija**: slanje PoA dokaza za zaradu RTC-a
+- **Registracija epohe**: prijava za raspodjelu nagrada
+- **Otkrivanje arhitekture**: mapiranje CPU množitelja (G4=2.5x, G5=2.0x itd.)
+
+## Brzi početak
+
+```rust
+use clawrtc::{NodeClient, Wallet, CpuArch};
+
+fn main() {
+    // Generiraj novi novčanik
+    let wallet = Wallet::generate();
+    println!("Adresa: {}", wallet.address());
+    println!("Javni ključ: {}", wallet.public_key_hex());
+
+    // Potpiši poruku
+    let sig = wallet.sign(b"hello rustchain");
+    let valid = Wallet::verify(&wallet.public_key_hex(), b"hello rustchain", &sig).unwrap();
+    println!("Potpis valjan: {}", valid);
+
+    // Spoji se na mrežu
+    let node = NodeClient::new("https://rustchain.org");
+
+    // Provjeri zdravlje
+    let health = node.health().unwrap();
+    println!("Čvor v{} (vrijeme rada {}s)", health.version, health.uptime_s);
+
+    // Provjeri stanje
+    let balance = node.balance(&wallet.address()).unwrap();
+    println!("Stanje: {} RTC", balance);
+
+    // Provjeri množitelje starosti hardvera
+    println!("G4 bonus: {}x", CpuArch::G4.multiplier());
+    println!("G5 bonus: {}x", CpuArch::G5.multiplier());
+}
+```
+
+## Množitelji starosti hardvera
+
+| Arhitektura | Množitelj | Primjeri |
+|-------------|-----------|----------|
+| PowerPC G4 | 2.5x | PowerBook G4, Power Mac G4 |
+| PowerPC G5 | 2.0x | Power Mac G5, Xserve G5 |
+| PowerPC G3 | 1.8x | iBook G3, Blue & White G3 |
+| Pentium 4 | 1.5x | Dell Dimension, HP Pavilion |
+| Retro x86 | 1.4x | 486, 386, rani Pentium |
+| Core 2 Duo | 1.3x | MacBook 2006-2008 |
+| Apple Silicon | 1.2x | M1, M2, M3 |
+| Moderna | 1.0x | Trenutni x86_64, aarch64 |
+
+## Licenca
+
+MIT - [Elyan Labs](https://rustchain.org)
