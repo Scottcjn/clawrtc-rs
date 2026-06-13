@@ -21,11 +21,12 @@ fn main() {
     // إنشاء محفظة جديدة
     let wallet = Wallet::generate();
     println!("Address: {}", wallet.address());
-    println!("Public Key: {}", wallet.public_key_hex());
+    let public_key_hex = wallet.public_key_hex();
+    println!("Public Key: {}", public_key_hex);
 
     // توقيع رسالة
     let sig = wallet.sign(b"hello rustchain");
-    let valid = Wallet::verify(&wallet.public_key_hex(), b"hello rustchain", &sig).unwrap();
+    let valid = Wallet::verify(&public_key_hex, b"hello rustchain", &sig).unwrap();
     println!("Signature valid: {}", valid);
 
     // الاتصال بالشبكة
