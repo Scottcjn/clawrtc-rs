@@ -2,6 +2,7 @@
 use clawrtc::{MinerInfo, NodeClient};
 use serde::Serialize;
 use std::{env, process};
+use tracing::{error, info};
 
 const DEFAULT_NODE: &str = "https://rustchain.org";
 
@@ -9,7 +10,34 @@ const DEFAULT_NODE: &str = "https://rustchain.org";
 struct CliOptions {
     node_url: String,
     ice_servers: IceServerConfig,
+    log_format: LogFormat,
     args: Vec<String>,
+}
+
+/// Output format for the diagnostic log stream emitted on stderr.
+///
+/// `Text` keeps the human-friendly single-line format (the default), while
+/// `Json` emits one JSON object per event so logs can be shipped to
+/// aggregators such as the ELK stack or Grafana Loki. Logs always go to
+/// stderr, leaving stdout reserved for command results (including `--json`
+/// output) so the two streams stay independently parseable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+enum LogFormat {
+    #[default]
+    Text,
+    Json,
+}
+
+impl LogFormat {
+    fn parse(value: &str) -> Result<Self, String> {
+        match value {
+            "text" => Ok(LogFormat::Text),
+            "json" => Ok(LogFormat::Json),
+            other => Err(usage(&format!(
+                "--log-format must be 'text' or 'json', got: {other}"
+            ))),
+        }
+    }
 }
 
 #[derive(Debug, Default, PartialEq)]
@@ -58,12 +86,14 @@ fn main() {
 
 fn run(raw_args: Vec<String>) -> Result<(), String> {
     let options = parse_global_options(raw_args)?;
+    init_logging(options.log_format);
+
     let (command, rest) = options
         .args
         .split_first()
         .ok_or_else(|| usage("missing command"))?;
 
-    match command.as_str() {
+    let result = match command.as_str() {
         "status" => status(&options, rest),
         "wallet" => wallet(&options.node_url, rest),
         "miner" => miner(&options.node_url, rest),
@@ -72,7 +102,30 @@ fn run(raw_args: Vec<String>) -> Result<(), String> {
             Ok(())
         }
         _ => Err(usage(&format!("unknown command: {command}"))),
+    };
+
+    if let Err(err) = &result {
+        error!(error = %err, command = %command, "command failed");
     }
+    result
+}
+
+/// Install the global tracing subscriber for the chosen log format.
+///
+/// The verbosity honours the standard `RUST_LOG` environment variable and
+/// falls back to `info` when it is unset, so production miners can dial logs
+/// up or down without recompiling. `try_init` is used so the call is a no-op
+/// if a subscriber was already installed (e.g. in tests).
+fn init_logging(format: LogFormat) {
+    use tracing_subscriber::{fmt, EnvFilter};
+
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+    let builder = fmt().with_env_filter(filter).with_writer(std::io::stderr);
+
+    let _ = match format {
+        LogFormat::Json => builder.json().try_init(),
+        LogFormat::Text => builder.try_init(),
+    };
 }
 
 fn status(options: &CliOptions, args: &[String]) -> Result<(), String> {
@@ -80,6 +133,7 @@ fn status(options: &CliOptions, args: &[String]) -> Result<(), String> {
     let wallet = option_value(args, "--wallet")?;
     reject_unknown_flags(args, &["--json", "--wallet"])?;
 
+    info!(node = %options.node_url, wallet = wallet.as_deref(), "fetching node status");
     let node = NodeClient::new(&options.node_url);
     let health = node
         .health()
@@ -111,6 +165,16 @@ fn status(options: &CliOptions, args: &[String]) -> Result<(), String> {
         stun_servers_configured: options.ice_servers.stun.len(),
         turn_servers_configured: options.ice_servers.turn.len(),
     };
+
+    info!(
+        node_ok = output.node_ok,
+        node_version = %output.node_version,
+        active_miners = output.active_miners,
+        wallet = output.wallet.as_deref(),
+        balance_rtc = output.balance_rtc,
+        mining_active = output.mining_active,
+        "node status retrieved"
+    );
 
     if json {
         print_json(&output)
@@ -160,6 +224,7 @@ fn wallet_balance(node_url: &str, args: &[String]) -> Result<(), String> {
         return Err(usage("wallet balance accepts only one wallet address"));
     }
 
+    info!(node = %node_url, wallet = %wallet, "fetching wallet balance");
     let node = NodeClient::new(node_url);
     let balance = node
         .balance(wallet)
@@ -168,6 +233,7 @@ fn wallet_balance(node_url: &str, args: &[String]) -> Result<(), String> {
         wallet: wallet.to_string(),
         balance_rtc: balance,
     };
+    info!(wallet = %output.wallet, balance_rtc = output.balance_rtc, "wallet balance retrieved");
 
     if json {
         print_json(&output)
@@ -195,6 +261,7 @@ fn miner_stats(node_url: &str, args: &[String]) -> Result<(), String> {
         return Err(usage("miner stats does not accept positional arguments"));
     }
 
+    info!(node = %node_url, "fetching miner stats");
     let node = NodeClient::new(node_url);
     let miners = node
         .miners()
@@ -203,6 +270,10 @@ fn miner_stats(node_url: &str, args: &[String]) -> Result<(), String> {
         active_miners: miners.len(),
         miners,
     };
+    info!(
+        active_miners = output.active_miners,
+        "miner stats retrieved"
+    );
 
     if json {
         print_json(&output)
@@ -229,6 +300,7 @@ fn miner_stats(node_url: &str, args: &[String]) -> Result<(), String> {
 fn parse_global_options(raw_args: Vec<String>) -> Result<CliOptions, String> {
     let mut node_url = DEFAULT_NODE.to_string();
     let mut ice_servers = IceServerConfig::default();
+    let mut log_format = LogFormat::default();
     let mut args = Vec::new();
     let mut iter = raw_args.into_iter();
 
@@ -237,6 +309,13 @@ fn parse_global_options(raw_args: Vec<String>) -> Result<CliOptions, String> {
             node_url = iter.next().ok_or_else(|| usage("--node requires a URL"))?;
         } else if let Some(value) = arg.strip_prefix("--node=") {
             node_url = value.to_string();
+        } else if arg == "--log-format" {
+            let value = iter
+                .next()
+                .ok_or_else(|| usage("--log-format requires a value (text|json)"))?;
+            log_format = LogFormat::parse(&value)?;
+        } else if let Some(value) = arg.strip_prefix("--log-format=") {
+            log_format = LogFormat::parse(value)?;
         } else if arg == "--stun" {
             let value = iter.next().ok_or_else(|| usage("--stun requires a URL"))?;
             push_ice_server(&mut ice_servers.stun, "--stun", value)?;
@@ -257,6 +336,7 @@ fn parse_global_options(raw_args: Vec<String>) -> Result<CliOptions, String> {
     Ok(CliOptions {
         node_url,
         ice_servers,
+        log_format,
         args,
     })
 }
@@ -365,9 +445,18 @@ fn print_usage() {
 
 fn usage_text() -> &'static str {
     "Usage:
-  clawrtc [--node URL] [--stun URL] [--turn URL] status [--json] [--wallet WALLET]
-  clawrtc [--node URL] [--stun URL] [--turn URL] wallet balance WALLET [--json]
-  clawrtc [--node URL] [--stun URL] [--turn URL] miner stats [--json]"
+  clawrtc [GLOBAL OPTIONS] status [--json] [--wallet WALLET]
+  clawrtc [GLOBAL OPTIONS] wallet balance WALLET [--json]
+  clawrtc [GLOBAL OPTIONS] miner stats [--json]
+
+Global options:
+  --node URL            RustChain node base URL (default: https://rustchain.org)
+  --stun URL            Add a STUN server (repeatable)
+  --turn URL            Add a TURN server (repeatable)
+  --log-format FORMAT   Diagnostic log format on stderr: text (default) or json
+
+Logs are written to stderr; command results (including --json) go to stdout.
+Log verbosity follows the RUST_LOG environment variable (default: info)."
 }
 
 #[cfg(test)]
@@ -389,9 +478,41 @@ mod tests {
             CliOptions {
                 node_url: "https://example.test".into(),
                 ice_servers: IceServerConfig::default(),
+                log_format: LogFormat::Text,
                 args: vec!["status".into(), "--json".into()],
             }
         );
+    }
+
+    #[test]
+    fn defaults_to_text_log_format() {
+        let options = parse_global_options(vec!["status".into()]).unwrap();
+        assert_eq!(options.log_format, LogFormat::Text);
+    }
+
+    #[test]
+    fn parses_log_format_option() {
+        let options =
+            parse_global_options(vec!["--log-format".into(), "json".into(), "status".into()])
+                .unwrap();
+        assert_eq!(options.log_format, LogFormat::Json);
+        assert_eq!(options.args, vec!["status".to_string()]);
+
+        let options =
+            parse_global_options(vec!["--log-format=text".into(), "status".into()]).unwrap();
+        assert_eq!(options.log_format, LogFormat::Text);
+    }
+
+    #[test]
+    fn rejects_invalid_log_format() {
+        assert!(
+            parse_global_options(vec!["--log-format".into(), "yaml".into()])
+                .unwrap_err()
+                .contains("--log-format must be 'text' or 'json'")
+        );
+        assert!(parse_global_options(vec!["--log-format".into()])
+            .unwrap_err()
+            .contains("--log-format requires a value"));
     }
 
     #[test]
