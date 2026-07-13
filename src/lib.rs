@@ -34,7 +34,7 @@
 
 use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
 use reqwest::blocking::Client;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use sha2::{Digest, Sha256};
 
 /// Errors returned by the ClawRTC client.
@@ -79,8 +79,36 @@ pub struct MinerInfo {
     pub device_arch: String,
     #[serde(default)]
     pub device_family: String,
-    #[serde(default)]
+    /// Last miner activity, normalized to text for API compatibility.
+    ///
+    /// Legacy responses provide `last_seen` as text. Current nodes provide
+    /// `last_attest` as Unix seconds; the client converts that number to text.
+    #[serde(
+        default,
+        alias = "last_attest",
+        deserialize_with = "deserialize_last_seen"
+    )]
     pub last_seen: String,
+}
+
+fn deserialize_last_seen<'de, D>(deserializer: D) -> std::result::Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum LastSeenValue {
+        Text(String),
+        Unsigned(u64),
+        Signed(i64),
+    }
+
+    Ok(match Option::<LastSeenValue>::deserialize(deserializer)? {
+        Some(LastSeenValue::Text(value)) => value,
+        Some(LastSeenValue::Unsigned(value)) => value.to_string(),
+        Some(LastSeenValue::Signed(value)) => value.to_string(),
+        None => String::new(),
+    })
 }
 
 #[derive(Debug, Deserialize)]
@@ -88,6 +116,14 @@ pub struct MinerInfo {
 enum MinersResponse {
     List(Vec<MinerInfo>),
     Wrapped { miners: Vec<MinerInfo> },
+}
+
+impl MinersResponse {
+    fn into_miners(self) -> Vec<MinerInfo> {
+        match self {
+            Self::List(miners) | Self::Wrapped { miners } => miners,
+        }
+    }
 }
 
 /// Epoch enrollment response.
@@ -117,7 +153,7 @@ pub struct AttestResponse {
 /// Balance response.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BalanceResponse {
-    #[serde(default)]
+    #[serde(default, alias = "amount_rtc")]
     pub balance_rtc: f64,
 }
 
@@ -309,7 +345,8 @@ impl NodeClient {
     pub fn balance(&self, wallet: &str) -> Result<f64> {
         let resp: BalanceResponse = self
             .http
-            .get(format!("{}/balance/{wallet}", self.base_url))
+            .get(format!("{}/wallet/balance", self.base_url))
+            .query(&[("miner_id", wallet)])
             .send()?
             .json()?;
         Ok(resp.balance_rtc)
@@ -322,10 +359,7 @@ impl NodeClient {
             .get(format!("{}/api/miners", self.base_url))
             .send()?
             .json()?;
-        Ok(match resp {
-            MinersResponse::List(miners) => miners,
-            MinersResponse::Wrapped { miners } => miners,
-        })
+        Ok(resp.into_miners())
     }
 
     /// Request an attestation challenge nonce.
@@ -435,6 +469,45 @@ mod tests {
     }
 
     #[test]
+    fn test_miners_response_accepts_current_wrapped_shape() {
+        let response: MinersResponse = serde_json::from_str(
+            r#"{
+                "miners": [{
+                    "miner": "power8-s824-sophia",
+                    "device_arch": "POWER8",
+                    "device_family": "PowerPC",
+                    "last_attest": 1783954623
+                }],
+                "pagination": {"count": 1, "total": 1}
+            }"#,
+        )
+        .unwrap();
+
+        let miners = response.into_miners();
+        assert_eq!(miners.len(), 1);
+        assert_eq!(miners[0].miner, "power8-s824-sophia");
+        assert_eq!(miners[0].last_seen, "1783954623");
+    }
+
+    #[test]
+    fn test_miners_response_accepts_legacy_list_shape() {
+        let response: MinersResponse = serde_json::from_str(
+            r#"[{
+                "miner_id": "legacy-g5",
+                "device_arch": "g5",
+                "device_family": "powerpc",
+                "last_seen": "2026-07-13T12:00:00Z"
+            }]"#,
+        )
+        .unwrap();
+
+        let miners = response.into_miners();
+        assert_eq!(miners.len(), 1);
+        assert_eq!(miners[0].miner_id, "legacy-g5");
+        assert_eq!(miners[0].last_seen, "2026-07-13T12:00:00Z");
+    }
+
+    #[test]
     fn test_node_client_balance_uses_live_balance_path() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let base_url = format!("http://{}", listener.local_addr().unwrap());
@@ -445,11 +518,12 @@ mod tests {
             let bytes_read = stream.read(&mut buffer).unwrap();
             let request = String::from_utf8_lossy(&buffer[..bytes_read]).to_string();
 
-            let (status, body) = if request.starts_with("GET /balance/RTCabc123 HTTP/1.1") {
-                ("200 OK", r#"{"balance_rtc":12.5}"#)
-            } else {
-                ("404 Not Found", "<html>not found</html>")
-            };
+            let (status, body) =
+                if request.starts_with("GET /wallet/balance?miner_id=RTCabc123 HTTP/1.1") {
+                    ("200 OK", r#"{"amount_i64":12500000,"amount_rtc":12.5}"#)
+                } else {
+                    ("404 Not Found", "<html>not found</html>")
+                };
             let response = format!(
                 "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
                 body.len()
@@ -463,7 +537,7 @@ mod tests {
 
         let request = server.join().unwrap();
         assert!(
-            request.starts_with("GET /balance/RTCabc123 HTTP/1.1"),
+            request.starts_with("GET /wallet/balance?miner_id=RTCabc123 HTTP/1.1"),
             "unexpected request line: {request:?}"
         );
     }

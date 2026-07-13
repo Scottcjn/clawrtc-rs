@@ -35,6 +35,11 @@ fn main() {
     let health = node.health().unwrap();
     println!("Node v{} (uptime {}s)", health.version, health.uptime_s);
 
+    // List miners. Current and legacy /api/miners response shapes are supported.
+    for miner in node.miners().unwrap() {
+        println!("{} last seen {}", miner.miner, miner.last_seen);
+    }
+
     // Check balance
     let balance = node.balance(&wallet.address()).unwrap();
     println!("Balance: {} RTC", balance);
@@ -44,6 +49,28 @@ fn main() {
     println!("G5 bonus: {}x", CpuArch::G5.multiplier());
 }
 ```
+
+## CLI
+
+The global `--node` option defaults to `https://rustchain.org`. Add `--json` to
+the status, balance, or miner commands for machine-readable output.
+
+```bash
+clawrtc status
+clawrtc status --wallet RTC_ADDRESS --json
+clawrtc wallet balance RTC_ADDRESS
+clawrtc miner stats --json
+```
+
+`miner stats` reads `/api/miners`. The client accepts both the legacy bare list
+and the current `{ "miners": [...], "pagination": {...} }` envelope. The public
+`MinerInfo.last_seen` field remains a string: legacy `last_seen` text is kept as
+is, while the current numeric `last_attest` Unix timestamp is converted to its
+decimal string form.
+
+`NodeClient::balance` and `wallet balance` use the current
+`/wallet/balance?miner_id=...` endpoint. The node's `amount_rtc` response field
+is returned by the Rust API as `f64`.
 
 ## Antiquity Multipliers
 
@@ -58,6 +85,14 @@ fn main() {
 | Apple Silicon | 1.2x | M1, M2, M3 |
 | Modern | 1.0x | Current x86_64, aarch64 |
 
+## Development
+
+```bash
+cargo fmt --all -- --check
+cargo test --all-targets
+cargo clippy --all-targets -- -D warnings
+```
+
 ## License
 
-MIT — [Elyan Labs](https://rustchain.org)
+MIT — [Elyan Labs](https://rustchain.org)
