@@ -96,3 +96,10 @@ cargo clippy --all-targets -- -D warnings
 ## License
 
 MIT — [Elyan Labs](https://rustchain.org)
+
+
+## RustChain bounty #16256
+
+[BOUNTY: 10 RTC] clawrtc-rs: integration test suite — wallet roundtrip, address vectors, attestation determinism, error paths
+
+Submitted by 0wmz. See the bounty issue for scope.
