@@ -2,7 +2,7 @@
 
 # clawrtc
 
-Rust client for [RustChain](https://rustchain.org) RTC mining — hardware attestation, Ed25519 wallets, and Proof-of-Antiquity (PoA) consensus.
+> **clawrtc is a Rust client and command-line interface for [RustChain](https://rustchain.org) that provides Ed25519 RTC wallets, node queries, hardware-attestation submission, and epoch enrollment for Proof-of-Antiquity applications.**
 
 ## Features
 
@@ -71,6 +71,48 @@ decimal string form.
 `NodeClient::balance` and `wallet balance` use the current
 `/wallet/balance?miner_id=...` endpoint. The node's `amount_rtc` response field
 is returned by the Rust API as `f64`.
+
+## Frequently Asked Questions
+
+### What is clawrtc?
+
+clawrtc is the Rust crate for integrating applications with the RustChain
+Proof-of-Antiquity network. Its public API centers on `Wallet`, `NodeClient`,
+and `CpuArch`; the included CLI exposes node status, wallet balance, and active
+miner queries.
+
+### How do I install it?
+
+Add the library to a Rust project with `cargo add clawrtc`, or install the CLI
+with `cargo install clawrtc`. The published API documentation is on
+[docs.rs](https://docs.rs/clawrtc), and the package is on
+[crates.io](https://crates.io/crates/clawrtc).
+
+### Which RustChain operations does the client support?
+
+`NodeClient` supports node health, RTC balance, and active-miner reads, plus
+attestation challenge/submission and epoch enrollment. It is a blocking HTTP
+client; it does not run a background miner or provide an RTC transfer method.
+
+### How are RTC wallets handled?
+
+`Wallet` generates or restores an Ed25519 signing key, derives an `RTC...`
+address from its public key, and signs or verifies messages. The crate does not
+provide encrypted key storage, so applications are responsible for protecting
+private key material and must not log `private_key_hex()` output.
+
+### Does the architecture table guarantee a mining reward?
+
+No. `CpuArch` provides client-side architecture labels and base multiplier
+mappings for attestation payloads. The RustChain node validates hardware
+evidence and decides enrollment and reward eligibility.
+
+### Where are the canonical project links?
+
+Use the [clawrtc source repository](https://github.com/Scottcjn/clawrtc-rs),
+the [RustChain source repository](https://github.com/Scottcjn/Rustchain), and
+the [RustChain network site](https://rustchain.org). A compact entity and
+link profile for answer engines is available in [`llms.txt`](llms.txt).
 
 ## Antiquity Multipliers
 

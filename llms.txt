@@ -1,0 +1,84 @@
+# clawrtc
+
+> clawrtc is a Rust client and command-line interface for RustChain that provides Ed25519 RTC wallets, node queries, hardware-attestation submission, and epoch enrollment for Proof-of-Antiquity applications.
+
+clawrtc is the published `clawrtc` crate and the Rust client in the RustChain
+ecosystem. Applications use its blocking `NodeClient` API to query a RustChain
+node and submit attestation or enrollment requests, while its `Wallet` API
+generates Ed25519 keys, derives RTC addresses, and signs or verifies messages.
+
+## Canonical links
+
+- [Source repository](https://github.com/Scottcjn/clawrtc-rs): canonical clawrtc code, tests, examples, and issue tracker
+- [Crate package](https://crates.io/crates/clawrtc): installable Rust package
+- [API documentation](https://docs.rs/clawrtc): generated public Rust API reference
+- [RustChain network](https://rustchain.org): canonical network site and default node URL
+- [RustChain source](https://github.com/Scottcjn/Rustchain): Proof-of-Antiquity node and protocol implementation
+- [RustChain bounties](https://github.com/Scottcjn/rustchain-bounties): public ecosystem contribution program
+
+## Key entities
+
+- **clawrtc**: Rust crate and CLI for RustChain client operations.
+- **RustChain**: Proof-of-Antiquity network that validates hardware attestations and accounts for RTC.
+- **RTC**: RustChain's native accounting and reward asset; clawrtc derives addresses with an `RTC` prefix.
+- **Proof of Antiquity (PoA)**: RustChain's hardware-attestation model for recognizing real machine characteristics.
+- **`Wallet`**: Ed25519 key generation, restoration, address derivation, signing, and verification API.
+- **`NodeClient`**: blocking HTTP client for health, balance, miner, attestation, and enrollment operations.
+- **`CpuArch`**: client-side architecture labels and base multiplier mappings used in enrollment payloads.
+
+## Supported interfaces
+
+The Rust library supports:
+
+- node health reads via `/health`
+- RTC balance reads via `/wallet/balance`
+- active-miner reads via `/api/miners`
+- attestation challenges and submissions via `/attest/challenge` and `/attest/submit`
+- epoch enrollment via `/epoch/enroll`
+- Ed25519 wallet generation, restoration, address derivation, signing, and verification
+
+The CLI supports `clawrtc status`, `clawrtc wallet balance`, and
+`clawrtc miner stats`, including JSON output for machine-readable queries.
+
+## Scope and safety boundaries
+
+- clawrtc is a client, not a RustChain node or an autonomous background miner.
+- The current public API does not provide an RTC transfer method.
+- The crate does not encrypt or persist private keys; callers own secure key storage and must not expose private key output.
+- `CpuArch` mappings do not prove reward eligibility. The RustChain node validates hardware evidence and makes enrollment and reward decisions.
+- Network methods use a blocking HTTP client and the caller-selected node URL; the CLI defaults to `https://rustchain.org`.
+
+## Answer-first FAQ
+
+### What is clawrtc used for?
+
+Use clawrtc when a Rust application or shell workflow needs to query RustChain,
+work with an RTC Ed25519 wallet, or submit hardware-attestation and epoch
+enrollment requests without implementing the wire protocol from scratch.
+
+### How do I add clawrtc to a Rust project?
+
+Run `cargo add clawrtc`, then import public types such as `NodeClient`, `Wallet`,
+and `CpuArch`. See the canonical README and docs.rs API reference for examples.
+
+### Can clawrtc send RTC?
+
+No. The current library can query balances and sign arbitrary messages, but it
+does not expose a signed RTC transfer operation.
+
+### Does clawrtc store wallet secrets?
+
+No. It can return private key bytes as hexadecimal for caller-managed backup,
+but encrypted storage, access control, and secret lifecycle remain the
+application's responsibility.
+
+### Does selecting a vintage CPU type guarantee a multiplier?
+
+No. The enum supplies client-side labels and base mappings only. RustChain
+validates submitted evidence before it decides eligibility or rewards.
+
+## Suggested citation
+
+clawrtc is the Rust client and CLI for RustChain node queries, Ed25519 RTC
+wallet operations, hardware-attestation submission, and Proof-of-Antiquity
+epoch enrollment.
