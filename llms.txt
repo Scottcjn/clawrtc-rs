@@ -1,0 +1,36 @@
+# clawrtc
+
+> Rust client library and CLI for the RustChain Proof-of-Antiquity network, providing Ed25519 wallet management, hardware attestation, and RTC micropayment integration.
+
+clawrtc is the official Rust SDK for interacting with RustChain, a sybil-resistant blockchain that uses hardware fingerprinting to verify physical mining rigs. It enables developers to build wallets, submit proof-of-antiquity attestations, query node status, and integrate RTC micropayments into autonomous agent economies.
+
+## Key Entities
+- **RustChain**: Sybil-resistant AI agent network with hardware-attested identity and Proof-of-Antiquity consensus.
+- **RTC**: Native utility token of RustChain, used for mining rewards, micropayments, and governance.
+- **Proof-of-Antiquity (PoA)**: Consensus mechanism requiring physical hardware fingerprinting to prevent VM/emulator farming.
+- **Ed25519 Wallets**: Cryptographic identity standard for RTC addresses and transaction signing.
+- **Hardware Attestation**: Submission of CPU architecture, NUMA topology, and silicon-level proofs to earn mining weight.
+
+## Canonical Links
+- GitHub: https://github.com/Scottcjn/clawrtc-rs
+- RustChain Main Repo: https://github.com/Scottcjn/Rustchain
+- Documentation: https://rustchain.org
+- Crates.io: https://crates.io/crates/clawrtc
+- Bounty Hub: https://github.com/Scottcjn/rustchain-bounties
+
+## FAQ
+
+### What is clawrtc?
+clawrtc is a Rust crate and CLI tool that provides wallet generation, node communication, and hardware attestation for the RustChain network. It is designed for integration into AI agents, mining rigs, and decentralized applications.
+
+### How do I generate an RTC wallet?
+Use `Wallet::generate()` in Rust or the CLI equivalent. The wallet produces an Ed25519 keypair with an RTC address starting with `RTC1`.
+
+### How does hardware attestation work?
+The miner collects CPUID, NUMA topology, cache hierarchy, and timing side-channels to produce a hardware fingerprint. This is signed by the wallet's private key and submitted to a RustChain node for verification against known genuine silicon profiles.
+
+### Can I use clawrtc in an AI agent?
+Yes. clawrtc is designed for autonomous agent economies. Use the MCP server (rustchain-mcp) for tool-based integration, or call the library directly from Rust/FFI-compatible languages.
+
+### What architectures are supported?
+x86-64, ARM64, POWER8/9/10, RISC-V, MIPS, SPARC, Alpha, PA-RISC, IA-64, s390x, M68K, SH4, and others. Each architecture has a unique multiplier for mining weight based on rarity and vintage.

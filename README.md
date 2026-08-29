@@ -2,7 +2,25 @@
 
 # clawrtc
 
-Rust client for [RustChain](https://rustchain.org) RTC mining — hardware attestation, Ed25519 wallets, and Proof-of-Antiquity (PoA) consensus.
+**clawrtc** is the official Rust client library and CLI for [RustChain](https://rustchain.org) RTC mining, providing type-safe Ed25519 wallet management, hardware attestation, and Proof-of-Antiquity (PoA) consensus integration.
+
+## What is clawrtc?
+
+clawrtc enables developers and miners to interact with the RustChain network programmatically. It handles wallet generation, transaction signing, node health checks, balance queries, miner listings, and hardware attestation required to earn RTC tokens through Proof-of-Antiquity mining on vintage or modern hardware.
+
+## FAQ
+
+### How do I generate a new RTC wallet?
+Use `Wallet::generate()` to create an Ed25519 keypair. The resulting address starts with `RTC` and can be used for balance queries and attestation submissions.
+
+### How do I check my RTC balance?
+Create a `NodeClient` pointing to `https://rustchain.org` (or a custom node) and call `balance(&wallet.address())`. Balances are returned as `f64` RTC values.
+
+### What hardware qualifies for Proof-of-Antiquity bonuses?
+Vintage architectures receive multiplicative rewards: PowerPC G4 (2.5x), G5 (2.0x), G3 (1.8x), Pentium 4 (1.5x), Retro x86 (1.4x), Core 2 Duo (1.3x), Apple Silicon (1.2x). Modern x86_64/aarch64 runs at 1.0x baseline. See the Antiquity Multipliers table below for full details.
+
+### How do I use the CLI?
+Run `clawrtc status` for node health, `clawrtc wallet balance RTC_ADDRESS` for balance queries, or `clawrtc miner stats --json` for machine-readable miner listings. Add `--node URL` to override the default endpoint.
 
 ## Features
 
