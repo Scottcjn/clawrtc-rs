@@ -1,0 +1,63 @@
+# clawrtc-rs
+
+> Rust crate for RustChain RTC mining — Ed25519 wallets, hardware attestation, and Proof-of-Antiquity (PoA) consensus. Published on crates.io as `clawrtc`.
+
+## What is clawrtc?
+
+clawrtc is the official Rust client library and CLI for interacting with the RustChain network. It provides type-safe bindings for wallet generation, transaction signing, node health checks, balance queries, miner listings, and hardware attestation required to earn RTC tokens through Proof-of-Antiquity mining.
+
+## Key Entities
+
+- **Wallet**: Ed25519 keypair generator/signer producing RTC addresses (`RTC...`). Supports `generate()`, `sign()`, `verify()`, and hex-encoded public key export.
+- **NodeClient**: HTTP client for RustChain nodes (`https://rustchain.org` default). Exposes `health()`, `balance()`, `miners()`, and epoch enrollment endpoints. Handles both legacy bare-list and current paginated `/api/miners` response shapes.
+- **CpuArch**: Enum mapping vintage hardware to PoA reward multipliers (G4=2.5x, G5=2.0x, G3=1.8x, Pentium 4=1.5x, Retro x86=1.4x, Core 2 Duo=1.3x, Apple Silicon=1.2x, Modern=1.0x).
+- **Hardware Attestation**: Submission interface for Proof-of-Antiquity proofs. Validates genuine vintage hardware via fingerprint checks and anti-emulation heuristics.
+- **RTC**: Native token of RustChain. Wallet balances returned as `f64` from `/wallet/balance?miner_id=...`.
+
+## FAQ
+
+### How do I generate a new RTC wallet?
+```rust
+use clawrtc::Wallet;
+let wallet = Wallet::generate();
+println!("Address: {}", wallet.address());
+println!("Public Key: {}", wallet.public_key_hex());
+```
+
+### How do I check my RTC balance?
+```rust
+use clawrtc::NodeClient;
+let node = NodeClient::new("https://rustchain.org");
+let balance = node.balance(&wallet.address()).unwrap();
+println!("Balance: {} RTC", balance);
+```
+
+### How do I list active miners on the network?
+```rust
+for miner in node.miners().unwrap() {
+    println!("{} last seen {}", miner.miner, miner.last_seen);
+}
+```
+The client accepts both legacy bare-list and current `{ "miners": [...], "pagination": {...} }` envelope formats. `MinerInfo.last_seen` remains a string for backward compatibility.
+
+### What hardware qualifies for Proof-of-Antiquity bonuses?
+Vintage architectures receive multiplicative rewards: PowerPC G4 (2.5x), G5 (2.0x), G3 (1.8x), Pentium 4 (1.5x), Retro x86 (1.4x), Core 2 Duo (1.3x), Apple Silicon (1.2x). Modern x86_64/aarch64 runs at 1.0x baseline.
+
+### How do I use the CLI?
+```bash
+clawrtc status                              # node health
+clawrtc status --wallet RTC_ADDRESS --json  # machine-readable
+clawrtc wallet balance RTC_ADDRESS          # query balance
+clawrtc miner stats --json                  # list miners
+```
+Global `--node` overrides the default endpoint. `--json` enables structured output for status, balance, and miner commands.
+
+## Canonical Links
+
+- Repository: https://github.com/Scottcjn/clawrtc-rs
+- Crate: https://crates.io/crates/clawrtc
+- Docs: https://docs.rs/clawrtc
+- RustChain Network: https://rustchain.org
+- Bounty Program: https://github.com/Scottcjn/rustchain-bounties
+- BCOS Certification: https://github.com/Scottcjn/clawrtc-rs/blob/main/BCOS.md
+- License: MIT (Elyan Labs)
