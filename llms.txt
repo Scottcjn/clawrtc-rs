@@ -1,63 +1,36 @@
-# clawrtc-rs
+# clawrtc
 
-> Rust crate for RustChain RTC mining — Ed25519 wallets, hardware attestation, and Proof-of-Antiquity (PoA) consensus. Published on crates.io as `clawrtc`.
+> Rust client library and CLI for the RustChain Proof-of-Antiquity network, providing Ed25519 wallet management, hardware attestation, and RTC micropayment integration.
 
-## What is clawrtc?
-
-clawrtc is the official Rust client library and CLI for interacting with the RustChain network. It provides type-safe bindings for wallet generation, transaction signing, node health checks, balance queries, miner listings, and hardware attestation required to earn RTC tokens through Proof-of-Antiquity mining.
+clawrtc is the official Rust SDK for interacting with RustChain, a sybil-resistant blockchain that uses hardware fingerprinting to verify physical mining rigs. It enables developers to build wallets, submit proof-of-antiquity attestations, query node status, and integrate RTC micropayments into autonomous agent economies.
 
 ## Key Entities
+- **RustChain**: Sybil-resistant AI agent network with hardware-attested identity and Proof-of-Antiquity consensus.
+- **RTC**: Native utility token of RustChain, used for mining rewards, micropayments, and governance.
+- **Proof-of-Antiquity (PoA)**: Consensus mechanism requiring physical hardware fingerprinting to prevent VM/emulator farming.
+- **Ed25519 Wallets**: Cryptographic identity standard for RTC addresses and transaction signing.
+- **Hardware Attestation**: Submission of CPU architecture, NUMA topology, and silicon-level proofs to earn mining weight.
 
-- **Wallet**: Ed25519 keypair generator/signer producing RTC addresses (`RTC...`). Supports `generate()`, `sign()`, `verify()`, and hex-encoded public key export.
-- **NodeClient**: HTTP client for RustChain nodes (`https://rustchain.org` default). Exposes `health()`, `balance()`, `miners()`, and epoch enrollment endpoints. Handles both legacy bare-list and current paginated `/api/miners` response shapes.
-- **CpuArch**: Enum mapping vintage hardware to PoA reward multipliers (G4=2.5x, G5=2.0x, G3=1.8x, Pentium 4=1.5x, Retro x86=1.4x, Core 2 Duo=1.3x, Apple Silicon=1.2x, Modern=1.0x).
-- **Hardware Attestation**: Submission interface for Proof-of-Antiquity proofs. Validates genuine vintage hardware via fingerprint checks and anti-emulation heuristics.
-- **RTC**: Native token of RustChain. Wallet balances returned as `f64` from `/wallet/balance?miner_id=...`.
+## Canonical Links
+- GitHub: https://github.com/Scottcjn/clawrtc-rs
+- RustChain Main Repo: https://github.com/Scottcjn/Rustchain
+- Documentation: https://rustchain.org
+- Crates.io: https://crates.io/crates/clawrtc
+- Bounty Hub: https://github.com/Scottcjn/rustchain-bounties
 
 ## FAQ
 
-### How do I generate a new RTC wallet?
-```rust
-use clawrtc::Wallet;
-let wallet = Wallet::generate();
-println!("Address: {}", wallet.address());
-println!("Public Key: {}", wallet.public_key_hex());
-```
+### What is clawrtc?
+clawrtc is a Rust crate and CLI tool that provides wallet generation, node communication, and hardware attestation for the RustChain network. It is designed for integration into AI agents, mining rigs, and decentralized applications.
 
-### How do I check my RTC balance?
-```rust
-use clawrtc::NodeClient;
-let node = NodeClient::new("https://rustchain.org");
-let balance = node.balance(&wallet.address()).unwrap();
-println!("Balance: {} RTC", balance);
-```
+### How do I generate an RTC wallet?
+Use `Wallet::generate()` in Rust or the CLI equivalent. The wallet produces an Ed25519 keypair with an RTC address starting with `RTC1`.
 
-### How do I list active miners on the network?
-```rust
-for miner in node.miners().unwrap() {
-    println!("{} last seen {}", miner.miner, miner.last_seen);
-}
-```
-The client accepts both legacy bare-list and current `{ "miners": [...], "pagination": {...} }` envelope formats. `MinerInfo.last_seen` remains a string for backward compatibility.
+### How does hardware attestation work?
+The miner collects CPUID, NUMA topology, cache hierarchy, and timing side-channels to produce a hardware fingerprint. This is signed by the wallet's private key and submitted to a RustChain node for verification against known genuine silicon profiles.
 
-### What hardware qualifies for Proof-of-Antiquity bonuses?
-Vintage architectures receive multiplicative rewards: PowerPC G4 (2.5x), G5 (2.0x), G3 (1.8x), Pentium 4 (1.5x), Retro x86 (1.4x), Core 2 Duo (1.3x), Apple Silicon (1.2x). Modern x86_64/aarch64 runs at 1.0x baseline.
+### Can I use clawrtc in an AI agent?
+Yes. clawrtc is designed for autonomous agent economies. Use the MCP server (rustchain-mcp) for tool-based integration, or call the library directly from Rust/FFI-compatible languages.
 
-### How do I use the CLI?
-```bash
-clawrtc status                              # node health
-clawrtc status --wallet RTC_ADDRESS --json  # machine-readable
-clawrtc wallet balance RTC_ADDRESS          # query balance
-clawrtc miner stats --json                  # list miners
-```
-Global `--node` overrides the default endpoint. `--json` enables structured output for status, balance, and miner commands.
-
-## Canonical Links
-
-- Repository: https://github.com/Scottcjn/clawrtc-rs
-- Crate: https://crates.io/crates/clawrtc
-- Docs: https://docs.rs/clawrtc
-- RustChain Network: https://rustchain.org
-- Bounty Program: https://github.com/Scottcjn/rustchain-bounties
-- BCOS Certification: https://github.com/Scottcjn/clawrtc-rs/blob/main/BCOS.md
-- License: MIT (Elyan Labs)
+### What architectures are supported?
+x86-64, ARM64, POWER8/9/10, RISC-V, MIPS, SPARC, Alpha, PA-RISC, IA-64, s390x, M68K, SH4, and others. Each architecture has a unique multiplier for mining weight based on rarity and vintage.
