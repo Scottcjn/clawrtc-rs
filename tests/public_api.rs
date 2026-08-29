@@ -248,3 +248,111 @@ fn enroll_returns_node_error_for_rejected_input() {
     let requests = server.join().expect("join mock node");
     assert!(requests[0].starts_with("POST /epoch/enroll HTTP/1.1"));
 }
+
+#[test]
+fn cpu_arch_multipliers_all_variants() {
+    // Multipliers are the core of PoA — every variant must produce the expected factor.
+    assert_eq!(CpuArch::G4.multiplier(), 2.5);
+    assert_eq!(CpuArch::G5.multiplier(), 2.0);
+    assert_eq!(CpuArch::G3.multiplier(), 1.8);
+    assert_eq!(CpuArch::Pentium4.multiplier(), 1.5);
+    assert_eq!(CpuArch::Retro.multiplier(), 1.4);
+    assert_eq!(CpuArch::Core2.multiplier(), 1.3);
+    assert_eq!(CpuArch::AppleSilicon.multiplier(), 1.2);
+    assert_eq!(CpuArch::Modern.multiplier(), 1.0);
+}
+
+#[test]
+fn cpu_arch_family_strings() {
+    // family() feeds device attestation payloads — wrong values break miner enrollment.
+    assert_eq!(CpuArch::G4.family(), "powerpc");
+    assert_eq!(CpuArch::G5.family(), "powerpc");
+    assert_eq!(CpuArch::G3.family(), "powerpc");
+    assert_eq!(CpuArch::Pentium4.family(), "x86");
+    assert_eq!(CpuArch::Retro.family(), "x86");
+    assert_eq!(CpuArch::Core2.family(), "x86");
+    assert_eq!(CpuArch::AppleSilicon.family(), "arm");
+    assert_eq!(CpuArch::Modern.family(), "x86");
+}
+
+#[test]
+fn cpu_arch_arch_strings() {
+    // arch_str() is the device arch sent to the node — must match what the node expects.
+    assert_eq!(CpuArch::G4.arch_str(), "g4");
+    assert_eq!(CpuArch::G5.arch_str(), "g5");
+    assert_eq!(CpuArch::G3.arch_str(), "g3");
+    assert_eq!(CpuArch::Pentium4.arch_str(), "pentium4");
+    assert_eq!(CpuArch::Retro.arch_str(), "retro");
+    assert_eq!(CpuArch::Core2.arch_str(), "core2duo");
+    assert_eq!(CpuArch::AppleSilicon.arch_str(), "apple_silicon");
+    assert_eq!(CpuArch::Modern.arch_str(), "modern");
+}
+
+#[test]
+fn wallet_from_private_key_roundtrips() {
+    // from_private_key takes a raw 32-byte array — the fastest path for key import.
+    let key_bytes = [0x42u8; 32];
+    let wallet = Wallet::from_private_key(&key_bytes);
+    assert!(wallet.address().starts_with("RTC"));
+    assert_eq!(wallet.address().len(), 43);
+
+    // Restoring from the hex must produce the same address.
+    let hex_key = wallet.private_key_hex();
+    let restored = Wallet::from_hex(&hex_key).expect("restore from hex");
+    assert_eq!(restored.address(), wallet.address());
+    assert_eq!(restored.public_key_hex(), wallet.public_key_hex());
+}
+
+#[test]
+fn wallet_from_hex_edge_cases() {
+    // Empty string should fail.
+    assert!(matches!(
+        Wallet::from_hex(""),
+        Err(ClawError::Wallet(_))
+    ));
+
+    // Valid hex but too short (1 byte instead of 32).
+    assert!(matches!(
+        Wallet::from_hex(&"ab".repeat(1)),
+        Err(ClawError::Wallet(_))
+    ));
+
+    // Valid hex but too long (33 bytes instead of 32).
+    // from_hex uses hex::decode which returns Vec<u8> then checks len != 32.
+    // 33 bytes of hex = 66 hex chars.
+    let too_long = "ab".repeat(33);
+    assert!(matches!(
+        Wallet::from_hex(&too_long),
+        Err(ClawError::Wallet(_))
+    ));
+
+    // Exactly 32 bytes should succeed.
+    assert!(Wallet::from_hex(&"ab".repeat(32)).is_ok());
+}
+
+#[test]
+fn wallet_verify_edge_cases() {
+    // Empty pubkey hex.
+    assert!(matches!(
+        Wallet::verify("", b"msg", &"00".repeat(64)),
+        Err(ClawError::Signing(_))
+    ));
+
+    // Empty signature hex.
+    assert!(matches!(
+        Wallet::verify(&"00".repeat(32), b"msg", ""),
+        Err(ClawError::Signing(_))
+    ));
+
+    // Invalid pubkey (wrong length — 31 bytes).
+    assert!(matches!(
+        Wallet::verify(&"00".repeat(31), b"msg", &"00".repeat(64)),
+        Err(ClawError::Signing(_))
+    ));
+
+    // Invalid signature (wrong length — 63 bytes).
+    assert!(matches!(
+        Wallet::verify(&"00".repeat(32), b"msg", &"00".repeat(63)),
+        Err(ClawError::Signing(_))
+    ));
+}
