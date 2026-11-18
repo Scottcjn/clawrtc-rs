@@ -7,7 +7,7 @@ fn main() {
         "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
         "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
     ];
-    
+
     for (i, key_hex) in keys.iter().enumerate() {
         let bytes = hex::decode(key_hex).unwrap();
         let mut arr = [0u8; 32];
@@ -16,6 +16,6 @@ fn main() {
         let pubkey = signing_key.verifying_key().to_bytes();
         let hash = Sha256::digest(pubkey);
         let addr = format!("RTC{}", &hex::encode(hash)[..40]);
-        println!("VECTOR_{}_ADDRESS: \"{}\"", i+1, addr);
+        println!("VECTOR_{}_ADDRESS: \"{}\"", i + 1, addr);
     }
 }

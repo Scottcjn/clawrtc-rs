@@ -91,7 +91,10 @@ fn wallet_verify_rejects_wrong_key() {
 fn address_derivation_vector_1() {
     let wallet = Wallet::from_hex(VECTOR_1_PRIVKEY).unwrap();
     let addr = wallet.address();
-    assert!(addr.starts_with("RTC"), "address must start with RTC prefix");
+    assert!(
+        addr.starts_with("RTC"),
+        "address must start with RTC prefix"
+    );
     assert_eq!(addr.len(), 43, "RTC + 40 hex chars = 43 total");
     assert_eq!(
         addr, VECTOR_1_ADDRESS,
